@@ -23,6 +23,7 @@ class Account:
         return {"ID": self.ID, "balance": self.balance, "note_history": self.note_history}
 
 
+
 class ExpanseTrackerApp:
     def __init__(self, master):
         self.master = master
@@ -103,14 +104,19 @@ class ExpanseTrackerApp:
     def update_balance(self):
         try:
             amount = float(self.amount_entry.get())
-            note = self.note_var.get()  # Use self.note_var
+            note = self.note_var.get()
 
-            # Check if there is at least one account, create a new one if not
+            # Check if there are any accounts
             if not self.accounts:
-                self.accounts.append(Account(0.0))
+                # If no accounts exist, create a new account
+                new_account = Account(0.0)
+                self.accounts.append(new_account)
+            else:
+                # Update the balance and note history of the first account
+                self.accounts[0].update_balance(amount, note)
 
-            # Update the account balance and note history
-            self.accounts[0].update_balance(amount, note)
+            # Save accounts after updating the balance
+            self.save_accounts()
 
             # Format note history with each operation on a new line
             note_history_text = "\n".join([f"({op['timestamp']}) Amount: {op['amount']}, Note: {op['note']}" for op in self.accounts[0].note_history])
@@ -128,6 +134,8 @@ class ExpanseTrackerApp:
 
         except ValueError:
             print("Invalid input. Please enter a valid number.")
+        except Exception as e:
+            print(f"An error occurred: {e}")
 
     def remove_account(self):
         if self.accounts:
@@ -180,6 +188,9 @@ class ExpanseTrackerApp:
                 Account.ID = max(acc["ID"] for acc in data) + 1
         except FileNotFoundError:
             print("No save file found.")
+            # If no save file is found, create a new account
+            new_account = Account(0.0)
+            self.accounts.append(new_account)
 
 
 if __name__ == "__main__":
