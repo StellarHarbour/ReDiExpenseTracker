@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 import json
 from datetime import datetime
+import os
 
 
 class Account:
@@ -23,7 +24,6 @@ class Account:
         return {"ID": self.ID, "balance": self.balance, "note_history": self.note_history}
 
 
-
 class ExpanseTrackerApp:
     def __init__(self, master):
         self.master = master
@@ -39,6 +39,9 @@ class ExpanseTrackerApp:
 
         # Create account list
         self.accounts = []
+
+        # Initialize the variable to store the current account frame
+        self.current_account_frame = None
 
         # Frame for buttons
         button_frame = tk.Frame(master)
@@ -80,26 +83,31 @@ class ExpanseTrackerApp:
         master.update_idletasks()
 
     def display_accounts(self):
-        for account in self.accounts:
+        # Clear the current account frame if it exists
+        if self.current_account_frame:
+            self.current_account_frame.destroy()
+
+        if self.accounts:
+            # Create Frame for the current account
+            self.current_account_frame = tk.Frame(self.master)
+            self.current_account_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+            account = self.accounts[0]  # Assuming you want to display information for the first account
             # Format note history with each operation on a new line
             note_history_text = "\n".join([f"({op['timestamp']}) Amount: {op['amount']}, Note: {op['note']}" for op in account.note_history])
 
-            # Create Frame for each account
-            account_frame = tk.Frame(self.master)
-            account_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
             # Create Text widget with vertical scroll bar inside the Frame
-            account_text = tk.Text(account_frame, wrap=tk.WORD, width=50, height=5)
+            account_text = tk.Text(self.current_account_frame, wrap=tk.WORD, width=50, height=5)
             account_text.insert(tk.END, f"ID: {account.ID}, Balance: {account.balance}, Note History:\n{note_history_text}")
             account_text.config(state=tk.DISABLED)  # Disable editing
-            account_scroll = tk.Scrollbar(account_frame, command=account_text.yview)
+            account_scroll = tk.Scrollbar(self.current_account_frame, command=account_text.yview)
             account_text.config(yscrollcommand=account_scroll.set)
 
             account_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
             account_scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
             # Save Text widget and Frame in the dictionary
-            self.account_vars[account.ID] = {"text": account_text, "frame": account_frame}
+            self.account_vars[account.ID] = {"text": account_text, "frame": self.current_account_frame}
 
     def update_balance(self):
         try:
@@ -118,16 +126,8 @@ class ExpanseTrackerApp:
             # Save accounts after updating the balance
             self.save_accounts()
 
-            # Format note history with each operation on a new line
-            note_history_text = "\n".join([f"({op['timestamp']}) Amount: {op['amount']}, Note: {op['note']}" for op in self.accounts[0].note_history])
-
-            # Update the content of the associated Text widget
-            if self.accounts[0].ID in self.account_vars:
-                text_widget = self.account_vars[self.accounts[0].ID]["text"]
-                text_widget.config(state=tk.NORMAL)  # Enable editing
-                text_widget.delete(1.0, tk.END)  # Clear existing content
-                text_widget.insert(tk.END, f"ID: {self.accounts[0].ID}, Balance: {self.accounts[0].balance}, Note History:\n{note_history_text}")
-                text_widget.config(state=tk.DISABLED)  # Disable editing
+            # Display accounts after updating the balance
+            self.display_accounts()
 
             self.amount_entry.delete(0, tk.END)  # Clear the entry field
             self.note_var.set("")  # Clear the note entry field
@@ -141,21 +141,23 @@ class ExpanseTrackerApp:
         if self.accounts:
             confirmation = messagebox.askokcancel("Confirmation", "Are you sure you want to remove the account?")
             if confirmation:
-                # Remove the account and destroy the associated Frame
-                account = self.accounts.pop()
-                if account.ID in self.account_vars:
-                    account_data = self.account_vars.pop(account.ID)
-                    account_data["frame"].destroy()
+                # Remove the accounts.json file
+                file_path = 'accounts.json'
+                try:
+                    os.remove(file_path)
+                    print(f"{file_path} removed.")
+                except FileNotFoundError:
+                    print(f"{file_path} does not exist.")
 
-                print("Account removed.")
-
-                # Create a new account and display it
+                # Create a new account
                 new_account = Account(0.0)
-                self.accounts.append(new_account)
-                self.display_accounts()  # Display accounts after loading
+                self.accounts = [new_account]
 
-                # Ensure that the account information is visible
-                self.master.update_idletasks()
+                # Save the updated accounts after removing
+                self.save_accounts()
+
+                # Display accounts after updating the balance
+                self.display_accounts()
 
             else:
                 print("Account removal canceled.")
@@ -182,15 +184,27 @@ class ExpanseTrackerApp:
         try:
             with open('accounts.json', 'r') as file:
                 data = json.load(file)
-                self.accounts = [Account(acc["balance"]) for acc in data]
-                for acc, acc_data in zip(self.accounts, data):
-                    acc.note_history = acc_data.get("note_history", [])
-                Account.ID = max(acc["ID"] for acc in data) + 1
+
+                if data:
+                    # If data is not empty, update accounts and find the maximum ID
+                    self.accounts = [Account(acc["balance"]) for acc in data]
+                    Account.ID = max(acc["ID"] for acc in data) + 1
+                    for acc, acc_data in zip(self.accounts, data):
+                        acc.note_history = acc_data.get("note_history", [])
+                else:
+                    # If data is empty, set Account.ID to 1
+                    Account.ID = 1
+
+            # Display accounts after loading
+            self.display_accounts()
+
         except FileNotFoundError:
             print("No save file found.")
             # If no save file is found, create a new account
             new_account = Account(0.0)
             self.accounts.append(new_account)
+            # Display accounts after creating a new account
+            self.display_accounts()
 
 
 if __name__ == "__main__":
